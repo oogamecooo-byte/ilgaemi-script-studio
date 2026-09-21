@@ -1,0 +1,3 @@
+*.mjs
+*.log
+.DS_Store

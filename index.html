@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>일개미 대본방</title>
+<style>
+:root{--bg:#FDF6E3;--ink:#2b2a27;--mute:#6b675e;--line:#e6dcc3;--acc:#8a5a10;--card:#fffaf0;--mod:#fff1c7;--new:#e3f4df;--err:#b3261e;--ok:#2e7d32}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.75;-webkit-text-size-adjust:100%}
+main{max-width:820px;margin:0 auto;padding:0 16px 120px}
+button{font:inherit;cursor:pointer}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar button{font-size:.88rem;padding:6px 12px;border-radius:8px;border:1px solid var(--acc);background:var(--card);color:var(--acc)}
+.bar button.pri{background:var(--acc);color:#fff}
+.status{font-size:.85rem;color:var(--mute);margin-left:auto;text-align:right}
+.status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.busy{color:var(--acc)}
+h1{font-size:1.2rem;margin:18px 0 4px}
+.hint{color:var(--mute);font-size:.85rem;margin-bottom:22px}
+.lock{max-width:360px;margin:18vh auto 0;text-align:center}
+.lock h1{font-size:1.4rem;margin-bottom:18px}
+.lock input{width:100%;font:inherit;font-size:1.05rem;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.lock button{margin-top:12px;width:100%;padding:12px;border-radius:10px;border:0;background:var(--acc);color:#fff;font-size:1rem}
+.lock .msg{margin-top:12px;font-size:.9rem;color:var(--err);min-height:1.4em}
+.list a{display:block;padding:14px 12px;margin:0 0 10px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--ink);text-decoration:none}
+.list a small{display:block;color:var(--mute);font-size:.8rem}
+.row{position:relative}
+.ln{font-size:1.2rem;margin:0 0 .9em;padding:2px 30px 2px 8px;border-radius:6px;outline:none;border-left:3px solid transparent;white-space:pre-wrap;word-break:keep-all;min-height:1.6em}
+.ln:focus{background:#fff;box-shadow:0 0 0 2px var(--line)}
+.ln.q{font-size:1.12rem;border-left-color:var(--acc);color:#4a3a14}
+.ln.eq{font-size:1.12rem;color:var(--acc)} .ln.end{font-weight:700;margin-top:1.4em}
+.ln.mod{background:var(--mod)} .ln.new{background:var(--new)}
+.ln:empty::before{content:"(빈 줄 — 내용을 쓰거나 Backspace로 삭제)";color:#b5ad98;font-size:1rem}
+.del{position:absolute;right:4px;top:4px;border:0;background:none;color:#b5ad98;font-size:1rem;display:none}
+.row:hover .del,.row:focus-within .del{display:block}
+figure{margin:4px 0 1.4em;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+figure img{display:block;width:100%;height:auto;border-radius:6px;min-height:40px;background:#f3ecd8}
+figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-all}
+.fix{color:var(--mute);font-size:.88rem;margin:0 0 1em;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;word-break:break-all}
+details{margin-top:40px;font-size:.86rem;color:var(--mute);border-top:1px solid var(--line);padding-top:12px}
+details pre{white-space:pre-wrap;font-family:inherit}
+.legend span{display:inline-block;padding:0 6px;border-radius:4px;margin-right:6px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+'use strict';
+/* ================= 설정 ================= */
+const CFG = {
+  dataRepo: 'oogamecooo-byte/ilgaemi-solo-scripts',
+  branch: 'main',
+  api: 'https://api.github.com',
+  autosaveMs: 2500
+};
+let TOKEN = sessionStorage.getItem('isc_t') || null;
+const LOCAL = new URLSearchParams(location.search).get('local'); // 로컬 시험용(localhost 전용·저장 비활성)
+const LOCAL_OK = LOCAL && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+
+/* ================= 유틸 ================= */
+const app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function b64encBytes(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000){s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));}return btoa(s);}
+function b64decBytes(b64){const bin=atob(String(b64).replace(/\s/g,''));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+const utf8enc = s => new TextEncoder().encode(s);
+const utf8dec = b => new TextDecoder().decode(b);
+const encPath = p => p.split('/').map(encodeURIComponent).join('/');
+const hhmm = () => { const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+function setStatus(kind, txt){ const el=document.getElementById('status'); if(el){ el.className='status '+kind; el.textContent=txt; } }
+
+/* ================= 잠금 해제 ================= */
+async function unlock(pw){
+  const r = await fetch('auth.enc.json?_='+Date.now(), {cache:'no-store'});
+  if(!r.ok) throw new Error('NOSETUP');
+  const cfg = await r.json();
+  const slots = cfg.slots || (cfg.ct ? [cfg] : []);
+  if(!slots.length) throw new Error('NOSETUP');
+  const km = await crypto.subtle.importKey('raw', utf8enc(pw), 'PBKDF2', false, ['deriveKey']);
+  for(const sl of slots){
+    try{
+      const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt:b64decBytes(sl.salt), iterations:cfg.iter||310000, hash:'SHA-256'},
+        km, {name:'AES-GCM', length:256}, false, ['decrypt']);
+      const pt = utf8dec(new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:b64decBytes(sl.iv)}, key, b64decBytes(sl.ct))));
+      const j = JSON.parse(pt); TOKEN = j.token; sessionStorage.setItem('isc_t', TOKEN); return;
+    }catch(_){}
+  }
+  throw new Error('WRONGPW');
+}
+
+/* ================= GitHub API ================= */
+async function gh(path, opts={}){
+  const r = await fetch(`${CFG.api}/repos/${CFG.dataRepo}/contents/${encPath(path)}${opts.q||''}`, {
+    method: opts.method||'GET', cache:'no-store',
+    headers: Object.assign({Authorization:'Bearer '+TOKEN, Accept: opts.accept||'application/vnd.github+json'},
+                           opts.body?{'Content-Type':'application/json'}:{}),
+    body: opts.body?JSON.stringify(opts.body):undefined
+  });
+  if(r.status===401){ sessionStorage.removeItem('isc_t'); TOKEN=null; showLock('인증이 만료됐습니다. 다시 입력해 주세요.'); throw new Error('401'); }
+  return r;
+}
+async function getText(path){
+  if(LOCAL_OK){ const r=await fetch(encPath(path)+'?_='+Date.now()); return {text: await r.text(), sha:'local'}; }
+  const r = await gh(path, {q:'?ref='+CFG.branch+'&_='+Date.now()});
+  if(!r.ok) throw new Error('불러오기 실패 ('+r.status+')');
+  const j = await r.json();
+  return {text: utf8dec(b64decBytes(j.content)), sha: j.sha};
+}
+async function putText(path, text, sha, message){
+  const r = await gh(path, {method:'PUT', body:{message, branch:CFG.branch, sha, content:b64encBytes(utf8enc(text))}});
+  if(r.status===409 || r.status===422) return {conflict:true};
+  if(!r.ok) throw new Error('저장 실패 ('+r.status+')');
+  const j = await r.json(); return {sha: j.content.sha};
+}
+const imgCache = {};
+async function imgUrl(path){
+  if(LOCAL_OK) return encPath(path);
+  if(imgCache[path]) return imgCache[path];
+  const r = await gh(path, {q:'?ref='+CFG.branch, accept:'application/vnd.github.raw'});
+  if(!r.ok) return null;
+  return imgCache[path] = URL.createObjectURL(await r.blob());
+}
+
+/* ================= 화면: 잠금 ================= */
+function showLock(msg){
+  app.innerHTML = `<div class="lock"><h1>🐜 일개미 대본방</h1>
+    <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password">
+    <button id="go">열기</button><div class="msg" id="msg">${esc(msg||'')}</div></div>`;
+  const pw=document.getElementById('pw'), go=document.getElementById('go'), m=document.getElementById('msg');
+  const run=async()=>{ go.disabled=true; m.style.color='var(--mute)'; m.textContent='여는 중…';
+    try{ await unlock(pw.value); route(); }
+    catch(e){ m.style.color='var(--err)'; m.textContent = e.message==='NOSETUP' ? '아직 토큰 설정 전입니다 (setup_token.mjs 실행 필요).' : '비밀번호가 맞지 않습니다.'; go.disabled=false; } };
+  go.onclick=run; pw.addEventListener('keydown',e=>{ if(e.key==='Enter') run(); }); pw.focus();
+}
+
+/* ================= 화면: 목록 ================= */
+async function showList(){
+  app.innerHTML = `<div class="bar"><b>🐜 일개미 대본방</b><span class="status" id="status">불러오는 중…</span></div><div class="list" id="list"></div>`;
+  let files;
+  if(LOCAL_OK){ files=[{name:LOCAL}]; }
+  else{
+    const r = await gh('', {q:'?ref='+CFG.branch+'&_='+Date.now()});
+    if(!r.ok){ setStatus('err','목록 실패 ('+r.status+')'); return; }
+    files = (await r.json()).filter(f=>f.type==='file' && f.name.endsWith('.md') && f.name!=='README.md');
+  }
+  files.sort((a,b)=>b.name.localeCompare(a.name));
+  document.getElementById('list').innerHTML = files.length ? files.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}">${esc(f.name.replace(/\.md$/,''))}<small>눌러서 열기</small></a>`).join('') : '<p class="hint">대본이 아직 없습니다.</p>';
+  setStatus('', files.length+'개');
+}
+
+/* ================= 화면: 편집 ================= */
+const IMG = /^!\[(.*?)\]\((.*?)\)\s*$/;
+let ED = null; // {path, sha, head, footer, orig[], state[], dirty, saving, timer}
+
+function parseMd(t){
+  const k = t.indexOf('## <대본>'); if(k<0) throw new Error("'## <대본>' 줄이 없습니다");
+  const head = t.slice(0,k) + '## <대본>\n';
+  const lines = t.slice(k).split('\n');
+  let end = lines.findIndex((l,i)=>i>0 && l.trim()==='---'); if(end<0) end=lines.length;
+  const body = lines.slice(1,end).map(l=>l.trim()).filter(Boolean);
+  const footer = lines.slice(end).join('\n');
+  const items = body.map(s => IMG.test(s) ? {k:'img', md:s} : s.startsWith('⏳') ? {k:'fix', md:s} : {k:'txt', md:s});
+  return {head, footer, items};
+}
+function buildMd(){
+  const body = ED.state.filter(i=>i.md.trim()).map(i=>i.md.trim()).join('\n\n');
+  return ED.head + '\n' + body + '\n\n' + ED.footer.replace(/^\n+/,'');
+}
+const cls = t => { t=t.trim(); return t.startsWith(':')?'q':t.startsWith('=')?'eq':t==='이상입니다.'?'end':''; };
+const spokenChars = () => ED.state.filter(i=>i.k==='txt').map(i=>i.md).join('').replace(/\s/g,'').length;
+
+async function showEdit(name){
+  app.innerHTML = `<div class="bar"><button id="back">← 목록</button><button id="reload">↻ 최신본</button><button class="pri" id="save">저장</button><span class="status" id="status">불러오는 중…</span></div><div id="ed"></div>`;
+  document.getElementById('back').onclick = async()=>{ if(await flush()) location.hash='#/'; };
+  document.getElementById('reload').onclick = async()=>{ if(ED&&ED.dirty&&!confirm('저장 안 된 수정이 있습니다. 버리고 최신본을 불러올까요?'))return; showEdit(name); };
+  document.getElementById('save').onclick = ()=>flush();
+  let got; try{ got = await getText(name); }catch(e){ setStatus('err', e.message); return; }
+  const p = parseMd(got.text);
+  ED = {path:name, sha:got.sha, head:p.head, footer:p.footer, orig:p.items.map(i=>i.md), state:p.items.map((it,n)=>({k:it.k, md:it.md, o:n})), dirty:false, saving:false, timer:null};
+  const title = (p.head.match(/^#\s+(.*)$/m)||[])[1] || name;
+  const ed = document.getElementById('ed');
+  ed.innerHTML = `<h1>${esc(title)}</h1><div class="hint">줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
+  render(); setStatus('ok', '불러옴 '+hhmm()+' · '+spokenChars().toLocaleString()+'자');
+}
+
+function render(){
+  const doc = document.getElementById('doc'); doc.innerHTML='';
+  ED.state.forEach((it,n)=>{
+    if(it.k==='img'){
+      const m = it.md.match(IMG); const parts = m[1].split('|').map(s=>s.trim());
+      const f = document.createElement('figure');
+      f.innerHTML = `<img alt="${esc(parts[0]||'')}"><figcaption>📎 ${esc(parts[0]||'')}${parts[1]?` · <a href="${esc(parts[1])}" target="_blank" rel="noopener">${esc(parts[1])}</a>`:''}${parts[2]?' · '+esc(parts[2]):''}</figcaption>`;
+      doc.appendChild(f);
+      imgUrl(m[2]).then(u=>{ if(u) f.querySelector('img').src=u; else f.querySelector('img').alt='⏳ 이미지 없음: '+m[2]; });
+      return;
+    }
+    if(it.k==='fix'){ const d=document.createElement('div'); d.className='fix'; d.textContent=it.md; doc.appendChild(d); return; }
+    const row = document.createElement('div'); row.className='row';
+    const p = document.createElement('div'); p.className='ln '+cls(it.md);
+    p.contentEditable='plaintext-only'; if(p.contentEditable!=='plaintext-only') p.contentEditable='true';
+    p.textContent = it.md; p.dataset.i = n; mark(p,it);
+    const x = document.createElement('button'); x.className='del'; x.textContent='✕'; x.title='이 줄 삭제';
+    x.onmousedown = e=>{ e.preventDefault(); removeLine(n); };
+    row.appendChild(p); row.appendChild(x); doc.appendChild(row);
+  });
+}
+function mark(p,it){ p.classList.toggle('new', it.o===null); p.classList.toggle('mod', it.o!==null && it.md!==ED.orig[it.o]); }
+function touched(){ ED.dirty=true; setStatus('busy','수정 중… (자동 저장 대기)'); clearTimeout(ED.timer); ED.timer=setTimeout(flush, CFG.autosaveMs); }
+function focusAt(n,atEnd){ const el=document.querySelector('.ln[data-i="'+n+'"]'); if(!el)return; el.focus(); const r=document.createRange(); r.selectNodeContents(el); r.collapse(!atEnd); const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
+function removeLine(n){ ED.state.splice(n,1); render(); touched(); let k=n-1; while(k>=0 && ED.state[k].k!=='txt') k--; if(k>=0) focusAt(k,true); }
+function caretOffset(el){ const s=getSelection(); if(!s.rangeCount) return el.textContent.length; const r=s.getRangeAt(0).cloneRange(); r.selectNodeContents(el); r.setEnd(s.getRangeAt(0).endContainer, s.getRangeAt(0).endOffset); return r.toString().length; }
+
+app.addEventListener('input', e=>{ const p=e.target; if(!p.classList||!p.classList.contains('ln')) return; const it=ED.state[+p.dataset.i]; it.md=p.textContent.replace(/\n+/g,' '); p.className='ln '+cls(it.md); mark(p,it); touched(); });
+app.addEventListener('paste', e=>{ if(!e.target.classList||!e.target.classList.contains('ln')) return; e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain')||'').replace(/\s*\n\s*/g,' ')); });
+app.addEventListener('keydown', e=>{
+  const p=e.target; if(!p.classList||!p.classList.contains('ln')) return; const n=+p.dataset.i;
+  if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); const off=caretOffset(p), t=p.textContent;
+    ED.state[n].md=t.slice(0,off).trimEnd(); ED.state.splice(n+1,0,{k:'txt', md:t.slice(off).trimStart(), o:null}); render(); touched(); focusAt(n+1,false); }
+  else if(e.key==='Backspace' && p.textContent==='' && !e.isComposing){ e.preventDefault(); removeLine(n); }
+});
+
+/* 저장: 충돌(다른 기기에서 먼저 저장)이면 덮어쓰지 않고 알림 */
+async function flush(){
+  if(!ED || !ED.dirty) return true;
+  clearTimeout(ED.timer);
+  if(LOCAL_OK){ setStatus('ok','(로컬 시험) 저장 생략 · '+spokenChars().toLocaleString()+'자'); ED.dirty=false; return true; }
+  if(ED.saving){ ED.timer=setTimeout(flush, 800); return false; }
+  ED.saving=true; setStatus('busy','저장 중…');
+  try{
+    const text = buildMd();
+    const res = await putText(ED.path, text, ED.sha, '대본 수정: '+ED.path+' (웹 편집기)');
+    if(res.conflict){
+      setStatus('err','⚠️ 다른 곳에서 먼저 수정됨 — 「↻ 최신본」을 눌러 다시 불러오세요 (지금 수정은 아직 저장 안 됨)');
+      ED.saving=false; return false;
+    }
+    ED.sha=res.sha; ED.dirty=false; ED.saving=false;
+    setStatus('ok','✅ 저장됨 '+hhmm()+' · '+spokenChars().toLocaleString()+'자');
+    return true;
+  }catch(e){ ED.saving=false; if(e.message!=='401') setStatus('err','저장 실패 — '+e.message+' · 「저장」을 다시 눌러 주세요'); return false; }
+}
+window.addEventListener('beforeunload', e=>{ if(ED && ED.dirty){ e.preventDefault(); e.returnValue=''; } });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flush(); });
+
+/* ================= 라우팅 ================= */
+function route(){
+  if(!TOKEN && !LOCAL_OK) return showLock();
+  const m = location.hash.match(/^#\/edit\/(.+)$/);
+  if(m) return showEdit(decodeURIComponent(m[1]));
+  ED=null; return showList();
+}
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
