@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>일개미 대본방</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FDF6E3">
+<meta property="og:title" content="일개미 대본방">
+<meta property="og:image" content="https://oogamecooo-byte.github.io/ilgaemi-script-studio/assets/icon-512.png">
+<meta name="twitter:card" content="summary">
 <style>
 :root{--bg:#FDF6E3;--ink:#2b2a27;--mute:#6b675e;--line:#e6dcc3;--acc:#8a5a10;--card:#fffaf0;--mod:#fff1c7;--new:#e3f4df;--err:#b3261e;--ok:#2e7d32}
 *{box-sizing:border-box}
@@ -123,7 +131,7 @@ async function imgUrl(path){
 
 /* ================= 화면: 잠금 ================= */
 function showLock(msg){
-  app.innerHTML = `<div class="lock"><h1>🐜 일개미 대본방</h1>
+  app.innerHTML = `<div class="lock"><img src="assets/icon-192.png" alt="" width="88" height="88" style="display:block;margin:0 auto 8px"><h1>일개미 대본방</h1>
     <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password">
     <button id="go">열기</button><div class="msg" id="msg">${esc(msg||'')}</div></div>`;
   const pw=document.getElementById('pw'), go=document.getElementById('go'), m=document.getElementById('msg');
