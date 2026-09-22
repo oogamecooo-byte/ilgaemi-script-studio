@@ -151,9 +151,23 @@ async function showList(){
     if(!r.ok){ setStatus('err','목록 실패 ('+r.status+')'); return; }
     files = (await r.json()).filter(f=>f.type==='file' && f.name.endsWith('.md') && f.name!=='README.md');
   }
-  files.sort((a,b)=>b.name.localeCompare(a.name));
-  document.getElementById('list').innerHTML = files.length ? files.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}">${esc(f.name.replace(/\.md$/,''))}<small>눌러서 열기</small></a>`).join('') : '<p class="hint">대본이 아직 없습니다.</p>';
-  setStatus('', files.length+'개');
+  // 최신 게시물이 위로: 게시일(그 파일의 첫 커밋) 내림차순 → 같으면 마지막 수정 내림차순 → 파일명. 커밋 조회 실패 시 파일명 속 날짜로 대체.
+  const fnDate = n => { const m=n.match(/(\d{4}-\d{2}-\d{2})/); return m?m[1]+'T00:00:00Z':''; };
+  await Promise.all(files.map(async f=>{
+    f.posted=fnDate(f.name); f.edited='';
+    if(LOCAL_OK) return;
+    try{
+      const r = await fetch(`${CFG.api}/repos/${CFG.dataRepo}/commits?path=${encPath(f.name)}&sha=${CFG.branch}&per_page=100&_=${Date.now()}`,
+        {cache:'no-store', headers:{Authorization:'Bearer '+TOKEN, Accept:'application/vnd.github+json'}});
+      if(!r.ok) return;
+      const cs = await r.json();
+      if(cs.length){ f.edited=cs[0].commit.committer.date; f.posted=cs[cs.length-1].commit.committer.date; }
+    }catch(e){}
+  }));
+  files.sort((a,b)=> (b.posted||'').localeCompare(a.posted||'') || (b.edited||'').localeCompare(a.edited||'') || b.name.localeCompare(a.name));
+  const kst = s => s ? new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+  document.getElementById('list').innerHTML = files.length ? files.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}">${esc(f.name.replace(/\.md$/,''))}<small>${f.posted?'게시 '+kst(f.posted):''}${f.edited&&f.edited!==f.posted?' · 수정 '+kst(f.edited):''}${f.posted?'':'눌러서 열기'}</small></a>`).join('') : '<p class="hint">대본이 아직 없습니다.</p>';
+  setStatus('', files.length+'개 · 최신순');
 }
 
 /* ================= 화면: 편집 ================= */
