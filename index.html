@@ -49,6 +49,12 @@ figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-al
 details{margin-top:40px;font-size:.86rem;color:var(--mute);border-top:1px solid var(--line);padding-top:12px}
 details pre{white-space:pre-wrap;font-family:inherit}
 .legend span{display:inline-block;padding:0 6px;border-radius:4px;margin-right:6px}
+.blk{position:relative}
+.blk .xdel{position:absolute;right:8px;top:8px;border:1px solid var(--line);background:rgba(255,250,240,.92);color:var(--err);font-size:.85rem;padding:2px 9px;border-radius:8px;display:none;z-index:2}
+.blk:hover .xdel,.blk:focus-within .xdel{display:block}
+.ins{display:block;width:100%;border:0;background:none;color:transparent;font-size:.8rem;line-height:1;padding:3px 0;margin:-.55em 0 .1em;cursor:pointer;border-top:1px dashed transparent}
+.ins:hover,.ins:focus{color:var(--acc);border-top-color:var(--line);outline:none}
+@media (hover:none){.blk .xdel{display:block}.ins{color:#cdbf9f}}
 </style>
 </head>
 <body>
@@ -201,22 +207,30 @@ async function showEdit(name){
   ED = {path:name, sha:got.sha, head:p.head, footer:p.footer, orig:p.items.map(i=>i.md), state:p.items.map((it,n)=>({k:it.k, md:it.md, o:n})), dirty:false, saving:false, timer:null};
   const title = (p.head.match(/^#\s+(.*)$/m)||[])[1] || name;
   const ed = document.getElementById('ed');
-  ed.innerHTML = `<h1>${esc(title)}</h1><div class="hint">줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
+  ed.innerHTML = `<h1>${esc(title)}</h1><div class="hint">줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
   render(); setStatus('ok', '불러옴 '+hhmm()+' · '+spokenChars().toLocaleString()+'자');
 }
 
+function insBtn(at){ const b=document.createElement('button'); b.className='ins'; b.type='button'; b.textContent='＋ 여기에 줄 추가'; b.title='이 자리에 새 줄 추가';
+  b.onmousedown=e=>e.preventDefault(); b.onclick=()=>insertLine(at); return b; }
+function insertLine(at){ ED.state.splice(at,0,{k:'txt', md:'', o:null}); render(); touched(); focusAt(at,false); }
+function removeBlock(n){ const it=ED.state[n]; const what = it.k==='img' ? '이 이미지' : '이 ⏳ 칸';
+  if(!confirm(what+'를 대본에서 뺄까요? (저장소의 이미지 파일은 그대로 남습니다 · 되돌리려면 「↻ 최신본」 전에 저장되지 않게 하거나 이전 버전에서 복구)')) return;
+  ED.state.splice(n,1); render(); touched(); }
+function delBtn(n){ const x=document.createElement('button'); x.className='xdel'; x.type='button'; x.textContent='✕ 삭제'; x.title='이 칸을 대본에서 빼기'; x.onclick=()=>removeBlock(n); return x; }
 function render(){
   const doc = document.getElementById('doc'); doc.innerHTML='';
   ED.state.forEach((it,n)=>{
+    doc.appendChild(insBtn(n));
     if(it.k==='img'){
       const m = it.md.match(IMG); const parts = m[1].split('|').map(s=>s.trim());
-      const f = document.createElement('figure');
+      const f = document.createElement('figure'); f.className='blk';
       f.innerHTML = `<img alt="${esc(parts[0]||'')}"><figcaption>📎 ${esc(parts[0]||'')}${parts[1]?` · <a href="${esc(parts[1])}" target="_blank" rel="noopener">${esc(parts[1])}</a>`:''}${parts[2]?' · '+esc(parts[2]):''}</figcaption>`;
-      doc.appendChild(f);
+      f.appendChild(delBtn(n)); doc.appendChild(f);
       imgUrl(m[2]).then(u=>{ if(u) f.querySelector('img').src=u; else f.querySelector('img').alt='⏳ 이미지 없음: '+m[2]; });
       return;
     }
-    if(it.k==='fix'){ const d=document.createElement('div'); d.className='fix'; d.textContent=it.md; doc.appendChild(d); return; }
+    if(it.k==='fix'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='fix'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     const row = document.createElement('div'); row.className='row';
     const p = document.createElement('div'); p.className='ln '+cls(it.md);
     p.contentEditable='plaintext-only'; if(p.contentEditable!=='plaintext-only') p.contentEditable='true';
@@ -225,6 +239,7 @@ function render(){
     x.onmousedown = e=>{ e.preventDefault(); removeLine(n); };
     row.appendChild(p); row.appendChild(x); doc.appendChild(row);
   });
+  doc.appendChild(insBtn(ED.state.length));
 }
 function mark(p,it){ p.classList.toggle('new', it.o===null); p.classList.toggle('mod', it.o!==null && it.md!==ED.orig[it.o]); }
 function touched(){ ED.dirty=true; setStatus('busy','수정 중… (자동 저장 대기)'); clearTimeout(ED.timer); ED.timer=setTimeout(flush, CFG.autosaveMs); }
