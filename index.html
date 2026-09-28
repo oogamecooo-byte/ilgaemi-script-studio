@@ -31,8 +31,18 @@ h1{font-size:1.2rem;margin:18px 0 4px}
 .lock input{width:100%;font:inherit;font-size:1.05rem;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff}
 .lock button{margin-top:12px;width:100%;padding:12px;border-radius:10px;border:0;background:var(--acc);color:#fff;font-size:1rem}
 .lock .msg{margin-top:12px;font-size:.9rem;color:var(--err);min-height:1.4em}
-.list a{display:block;padding:14px 12px;margin:0 0 10px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--ink);text-decoration:none}
+.list a{display:block;padding:12px 12px;margin:0 0 8px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--ink);text-decoration:none}
 .list a small{display:block;color:var(--mute);font-size:.8rem}
+.tools{display:flex;gap:8px;justify-content:flex-end;margin:12px 0 6px}
+.tools button{font-size:.8rem;padding:3px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--mute)}
+.list details.dg{margin:0 0 6px;padding:0;border:0;font-size:1rem;color:var(--ink)}
+.list details.dg>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 6px;border-bottom:1px solid var(--line);font-weight:600;user-select:none}
+.list details.dg>summary::-webkit-details-marker{display:none}
+.list details.dg>summary::before{content:"▸";color:var(--acc);font-size:.85rem;width:12px;transition:transform .15s}
+.list details.dg[open]>summary::before{transform:rotate(90deg)}
+.list details.dg>summary .rel{font-size:.75rem;font-weight:600;color:#fff;background:var(--acc);border-radius:6px;padding:0 6px}
+.list details.dg>summary .cnt{margin-left:auto;color:var(--mute);font-weight:400;font-size:.82rem}
+.list details.dg>.items{padding:10px 0 6px 18px}
 .row{position:relative}
 .ln{font-size:1.2rem;margin:0 0 .9em;padding:2px 30px 2px 8px;border-radius:6px;outline:none;border-left:3px solid transparent;white-space:pre-wrap;word-break:keep-all;min-height:1.6em}
 .ln:focus{background:#fff;box-shadow:0 0 0 2px var(--line)}
@@ -46,8 +56,8 @@ figure{margin:4px 0 1.4em;background:var(--card);border:1px solid var(--line);bo
 figure img{display:block;width:100%;height:auto;border-radius:6px;min-height:40px;background:#f3ecd8}
 figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-all}
 .fix{color:var(--mute);font-size:.88rem;margin:0 0 1em;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;word-break:break-all}
-details{margin-top:40px;font-size:.86rem;color:var(--mute);border-top:1px solid var(--line);padding-top:12px}
-details pre{white-space:pre-wrap;font-family:inherit}
+#ed details{margin-top:40px;font-size:.86rem;color:var(--mute);border-top:1px solid var(--line);padding-top:12px}
+#ed details pre{white-space:pre-wrap;font-family:inherit}
 .legend span{display:inline-block;padding:0 6px;border-radius:4px;margin-right:6px}
 .blk{position:relative}
 .blk .xdel{position:absolute;right:8px;top:8px;border:1px solid var(--line);background:rgba(255,250,240,.92);color:var(--err);font-size:.85rem;padding:2px 9px;border-radius:8px;display:none;z-index:2}
@@ -171,9 +181,44 @@ async function showList(){
     }catch(e){}
   }));
   files.sort((a,b)=> (b.posted||'').localeCompare(a.posted||'') || (b.edited||'').localeCompare(a.edited||'') || b.name.localeCompare(a.name));
-  const kst = s => s ? new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
-  document.getElementById('list').innerHTML = files.length ? files.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}">${esc(f.name.replace(/\.md$/,''))}<small>${f.posted?'게시 '+kst(f.posted):''}${f.edited&&f.edited!==f.posted?' · 수정 '+kst(f.edited):''}${f.posted?'':'눌러서 열기'}</small></a>`).join('') : '<p class="hint">대본이 아직 없습니다.</p>';
-  setStatus('', files.length+'개 · 최신순');
+  const kst = s => s ? new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+  const kstDay = s => s ? new Date(s).toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}) : '';
+  // 날짜별 묶음(Report Vault 방식): 기준 = 파일명 속 날짜(대본의 날짜) → 없으면 게시일(KST).
+  // 최근 45일 = 일별 · 그보다 오래된 것 = 월별. 가장 최근 묶음만 기본 펼침, 나머지는 접힘(펼침 상태는 이 기기에 기억).
+  const DAY_WINDOW = 45, WD = ['일','월','화','수','목','금','토'];
+  const todayStr = new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
+  const ago = d => Math.round((Date.parse(todayStr+'T00:00:00Z') - Date.parse(d+'T00:00:00Z'))/864e5);
+  const groups = new Map();
+  for(const f of files){
+    const d = (f.name.match(/(\d{4}-\d{2}-\d{2})/)||[])[1] || kstDay(f.posted) || '날짜 없음';
+    const key = /^\d{4}-/.test(d) && ago(d) > DAY_WINDOW ? d.slice(0,7) : d;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  const keys = [...groups.keys()].sort((a,b)=> b.localeCompare(a));
+  const label = k => {
+    if(/^\d{4}-\d{2}$/.test(k)) return (+k.slice(0,4))+'년 '+(+k.slice(5))+'월';
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(k)) return k;
+    const dt = new Date(k+'T00:00:00Z');
+    return (+k.slice(5,7))+'월 '+(+k.slice(8))+'일 ('+WD[dt.getUTCDay()]+')';
+  };
+  const rel = k => { if(!/^\d{4}-\d{2}-\d{2}$/.test(k)) return ''; const n=ago(k); return n===0?'오늘':n===1?'어제':''; };
+  const title = n => n.replace(/\.md$/,'').replace(/_?\d{4}-\d{2}-\d{2}_?/,' ').replace(/_/g,' ').replace(/\s+/g,' ').trim() || n;
+  let saved = {}; try{ saved = JSON.parse(localStorage.getItem('isc_open')||'{}'); }catch(_){}
+  const list = document.getElementById('list');
+  if(!files.length){ list.innerHTML = '<p class="hint">대본이 아직 없습니다.</p>'; setStatus('', '0개'); return; }
+  list.innerHTML = `<div class="tools"><button id="openAll">모두 펼치기</button><button id="closeAll">모두 접기</button></div>` +
+    keys.map((k,i)=>{
+      const fs = groups.get(k), open = (k in saved) ? saved[k] : i===0, r = rel(k);
+      return `<details class="dg" data-k="${esc(k)}"${open?' open':''}><summary>${esc(label(k))}${r?` <span class="rel">${r}</span>`:''}<span class="cnt">${fs.length}개</span></summary><div class="items">` +
+        fs.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}">${esc(title(f.name))}<small>${f.posted?'게시 '+kst(f.posted):'눌러서 열기'}${f.edited&&f.edited!==f.posted?' · 수정 '+kst(f.edited):''}</small></a>`).join('') +
+        `</div></details>`;
+    }).join('');
+  const remember = () => { const o={}; list.querySelectorAll('details.dg').forEach(g=>o[g.dataset.k]=g.open); try{ localStorage.setItem('isc_open', JSON.stringify(o)); }catch(_){} };
+  list.querySelectorAll('details.dg').forEach(g=> g.addEventListener('toggle', remember));
+  document.getElementById('openAll').onclick = ()=> list.querySelectorAll('details.dg').forEach(g=>g.open=true);
+  document.getElementById('closeAll').onclick = ()=> list.querySelectorAll('details.dg').forEach(g=>g.open=false);
+  setStatus('', files.length+'개 · 날짜 '+keys.length+'묶음');
 }
 
 /* ================= 화면: 편집 ================= */
