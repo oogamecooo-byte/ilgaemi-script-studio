@@ -25,6 +25,13 @@ button{font:inherit;cursor:pointer}
 .status{font-size:.85rem;color:var(--mute);margin-left:auto;text-align:right}
 .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.busy{color:var(--acc)}
 h1{font-size:1.2rem;margin:18px 0 4px}
+.ttl{outline:none;border-radius:6px;padding:2px 30px 2px 8px;margin-left:-8px;cursor:text;position:relative;word-break:keep-all}
+.ttl:hover{background:#fff8e6}
+.ttl:focus{background:#fff;box-shadow:0 0 0 2px var(--line)}
+.ttl::after{content:"✎";position:absolute;right:8px;top:2px;color:#b5ad98;font-size:.9rem}
+.ttl.mod{background:var(--mod)}
+.ttl:empty::before{content:"(제목을 쓰세요)";color:#b5ad98}
+.list a b{display:block;font-weight:600;line-height:1.5;margin-bottom:2px}
 .hint{color:var(--mute);font-size:.85rem;margin-bottom:22px}
 .lock{max-width:360px;margin:18vh auto 0;text-align:center}
 .lock h1{font-size:1.4rem;margin-bottom:18px}
@@ -179,7 +186,14 @@ async function showList(){
       const cs = await r.json();
       if(cs.length){ f.edited=cs[0].commit.committer.date; f.posted=cs[cs.length-1].commit.committer.date; }
     }catch(e){}
-  }));
+  }).concat(files.map(async f=>{
+    // 카드 제목 = 대본 첫 줄의 '# 제목' (편집 화면에서 고친 제목) · 못 읽으면 파일명
+    try{
+      const t = LOCAL_OK ? await (await fetch(encPath(f.name)+'?_='+Date.now())).text()
+        : await (await gh(f.name, {q:'?ref='+CFG.branch+'&_='+Date.now(), accept:'application/vnd.github.raw'})).text();
+      f.title = ((t.match(/^#\s+(.*)$/m)||[])[1]||'').trim();
+    }catch(e){}
+  })));
   files.sort((a,b)=> (b.posted||'').localeCompare(a.posted||'') || (b.edited||'').localeCompare(a.edited||'') || b.name.localeCompare(a.name));
   const kst = s => s ? new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
   const kstDay = s => s ? new Date(s).toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}) : '';
@@ -211,7 +225,7 @@ async function showList(){
     keys.map((k,i)=>{
       const fs = groups.get(k), open = (k in saved) ? saved[k] : i===0, r = rel(k);
       return `<details class="dg" data-k="${esc(k)}"${open?' open':''}><summary>${esc(label(k))}${r?` <span class="rel">${r}</span>`:''}<span class="cnt">${fs.length}개</span></summary><div class="items">` +
-        fs.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}">${esc(title(f.name))}<small>${f.posted?'게시 '+kst(f.posted):'눌러서 열기'}${f.edited&&f.edited!==f.posted?' · 수정 '+kst(f.edited):''}</small></a>`).join('') +
+        fs.map(f=>`<a href="#/edit/${encodeURIComponent(f.name)}"><b>${esc(f.title||title(f.name))}</b><small>${f.title?esc(title(f.name))+' · ':''}${f.posted?'게시 '+kst(f.posted):'눌러서 열기'}${f.edited&&f.edited!==f.posted?' · 수정 '+kst(f.edited):''}</small></a>`).join('') +
         `</div></details>`;
     }).join('');
   const remember = () => { const o={}; list.querySelectorAll('details.dg').forEach(g=>o[g.dataset.k]=g.open); try{ localStorage.setItem('isc_open', JSON.stringify(o)); }catch(_){} };
@@ -235,9 +249,15 @@ function parseMd(t){
   const items = body.map(s => IMG.test(s) ? {k:'img', md:s} : s.startsWith('⏳') ? {k:'fix', md:s} : {k:'txt', md:s});
   return {head, footer, items};
 }
+function headWithTitle(){
+  const t = (ED.title||'').trim();
+  if(!t || t===ED.origTitle) return ED.head;          // 비우면 원래 제목 유지(제목 줄 삭제 방지)
+  if(/^#\s+.*$/m.test(ED.head)) return ED.head.replace(/^#\s+.*$/m, () => '# '+t);
+  return '# '+t+'\n\n'+ED.head;
+}
 function buildMd(){
   const body = ED.state.filter(i=>i.md.trim()).map(i=>i.md.trim()).join('\n\n');
-  return ED.head + '\n' + body + '\n\n' + ED.footer.replace(/^\n+/,'');
+  return headWithTitle() + '\n' + body + '\n\n' + ED.footer.replace(/^\n+/,'');
 }
 const cls = t => { t=t.trim(); return t.startsWith(':')?'q':t.startsWith('=')?'eq':t==='이상입니다.'?'end':''; };
 const spokenChars = () => ED.state.filter(i=>i.k==='txt').map(i=>i.md).join('').replace(/\s/g,'').length;
@@ -250,9 +270,15 @@ async function showEdit(name){
   let got; try{ got = await getText(name); }catch(e){ setStatus('err', e.message); return; }
   const p = parseMd(got.text);
   ED = {path:name, sha:got.sha, head:p.head, footer:p.footer, orig:p.items.map(i=>i.md), state:p.items.map((it,n)=>({k:it.k, md:it.md, o:n})), dirty:false, saving:false, timer:null};
-  const title = (p.head.match(/^#\s+(.*)$/m)||[])[1] || name;
+  const title = ((p.head.match(/^#\s+(.*)$/m)||[])[1]||'').trim();
+  ED.title = ED.origTitle = title;
   const ed = document.getElementById('ed');
-  ed.innerHTML = `<h1>${esc(title)}</h1><div class="hint">줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
+  ed.innerHTML = `<h1 class="ttl" id="ttl" title="눌러서 제목 고치기">${esc(title)}</h1><div class="hint"><b>제목</b>도 눌러서 고칠 수 있습니다 · 줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
+  const tt = document.getElementById('ttl');
+  tt.contentEditable='plaintext-only'; if(tt.contentEditable!=='plaintext-only') tt.contentEditable='true';
+  tt.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); tt.blur(); } });
+  tt.addEventListener('paste', e=>{ e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain')||'').replace(/\s*\n\s*/g,' ')); });
+  tt.addEventListener('input', ()=>{ ED.title = tt.textContent.replace(/\s*\n\s*/g,' '); tt.classList.toggle('mod', ED.title.trim()!==ED.origTitle); touched(); });
   render(); setStatus('ok', '불러옴 '+hhmm()+' · '+spokenChars().toLocaleString()+'자');
 }
 
