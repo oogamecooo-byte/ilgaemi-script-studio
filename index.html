@@ -63,6 +63,9 @@ figure{margin:4px 0 1.4em;background:var(--card);border:1px solid var(--line);bo
 figure img{display:block;width:100%;height:auto;border-radius:6px;min-height:40px;background:#f3ecd8}
 figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-all}
 .fix{color:var(--mute);font-size:.88rem;margin:0 0 1em;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;word-break:break-all}
+#ed details.ytt{margin:0 0 18px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:.9rem;background:rgba(46,125,50,.06)}
+#ed details.ytt>summary{cursor:pointer;font-weight:600}
+#ed details.ytt pre{white-space:pre-wrap;word-break:keep-all;font-family:inherit;margin:10px 0 0;line-height:1.6}
 #ed details{margin-top:40px;font-size:.86rem;color:var(--mute);border-top:1px solid var(--line);padding-top:12px}
 #ed details pre{white-space:pre-wrap;font-family:inherit}
 .legend span{display:inline-block;padding:0 6px;border-radius:4px;margin-right:6px}
@@ -275,6 +278,8 @@ async function showEdit(name){
   const ed = document.getElementById('ed');
   ed.innerHTML = `<h1 class="ttl" id="ttl" title="눌러서 제목 고치기">${esc(title)}</h1><div class="hint"><b>제목</b>도 눌러서 고칠 수 있습니다 · 줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
   const tt = document.getElementById('ttl');
+  const ytm = p.head.match(/<!-- YT-THUMBNAIL:START -->([\s\S]*?)<!-- YT-THUMBNAIL:END -->/);  // YT-Thumbnail 제안(대본 밖 · 읽기 전용 · 2026-09-30)
+  if(ytm){ const d=document.createElement('details'); d.open=true; d.className='ytt'; d.innerHTML='<summary>🖼️ 썸네일 · 제목 · 첫 30초 제안 (YT-Thumbnail · 읽기 전용 · 말하는 대본 아님)</summary><pre>'+esc(ytm[1].trim())+'</pre>'; tt.after(d); }
   tt.contentEditable='plaintext-only'; if(tt.contentEditable!=='plaintext-only') tt.contentEditable='true';
   tt.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); tt.blur(); } });
   tt.addEventListener('paste', e=>{ e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain')||'').replace(/\s*\n\s*/g,' ')); });
