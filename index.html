@@ -62,6 +62,7 @@ h1{font-size:1.2rem;margin:18px 0 4px}
 figure{margin:4px 0 1.4em;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
 figure img{display:block;width:100%;height:auto;border-radius:6px;min-height:40px;background:#f3ecd8}
 figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-all}
+.cut{color:var(--acc,#8a5a10);font-weight:600;text-align:center;margin:.4em 0 1.2em;padding:8px 10px;border-top:2px dashed var(--line);border-bottom:2px dashed var(--line)}
 .fix{color:var(--mute);font-size:.88rem;margin:0 0 1em;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;word-break:break-all}
 #ed details.ytt{margin:0 0 18px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:.9rem;background:rgba(46,125,50,.06)}
 #ed details.ytt>summary{cursor:pointer;font-weight:600}
@@ -249,7 +250,7 @@ function parseMd(t){
   let end = lines.findIndex((l,i)=>i>0 && l.trim()==='---'); if(end<0) end=lines.length;
   const body = lines.slice(1,end).map(l=>l.trim()).filter(Boolean);
   const footer = lines.slice(end).join('\n');
-  const items = body.map(s => IMG.test(s) ? {k:'img', md:s} : s.startsWith('⏳') ? {k:'fix', md:s} : {k:'txt', md:s});
+  const items = body.map(s => IMG.test(s) ? {k:'img', md:s} : s.startsWith('⏳') ? {k:'fix', md:s} : s.startsWith('🎬') ? {k:'cut', md:s} : {k:'txt', md:s});  // 🎬 = 영상 전환 표시(인트로 브릿지 등 · 말하는 대본 밖 · 2026-10-01)
   return {head, footer, items};
 }
 function headWithTitle(){
@@ -306,6 +307,7 @@ function render(){
       imgUrl(m[2]).then(u=>{ if(u) f.querySelector('img').src=u; else f.querySelector('img').alt='⏳ 이미지 없음: '+m[2]; });
       return;
     }
+    if(it.k==='cut'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='cut'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     if(it.k==='fix'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='fix'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     const row = document.createElement('div'); row.className='row';
     const p = document.createElement('div'); p.className='ln '+cls(it.md);
