@@ -50,7 +50,9 @@ h1{font-size:1.2rem;margin:18px 0 4px}
 .list details.dg>summary .rel{font-size:.75rem;font-weight:600;color:#fff;background:var(--acc);border-radius:6px;padding:0 6px}
 .list details.dg>summary .cnt{margin-left:auto;color:var(--mute);font-weight:400;font-size:.82rem}
 .list details.dg>.items{padding:10px 0 6px 18px}
-.row{position:relative}
+.row{position:relative;display:flex;align-items:flex-start;gap:6px}
+.lno{flex:0 0 38px;text-align:right;color:#c9c3b6;font-size:.78rem;line-height:1.6;padding-top:5px;user-select:none;font-variant-numeric:tabular-nums}  /* 줄 번호 L숫자 · 옅은 회색 · 2026-10-01 사용자 지시 · 말하는 줄만 셈(이미지·⏳·🎬 제외) */
+.row .ln{flex:1;min-width:0}
 .ln{font-size:1.2rem;margin:0 0 .9em;padding:2px 30px 2px 8px;border-radius:6px;outline:none;border-left:3px solid transparent;white-space:pre-wrap;word-break:keep-all;min-height:1.6em}
 .ln:focus{background:#fff;box-shadow:0 0 0 2px var(--line)}
 .ln.q{font-size:1.12rem;border-left-color:var(--acc);color:#4a3a14}
@@ -297,6 +299,7 @@ function removeBlock(n){ const it=ED.state[n]; const what = it.k==='img' ? '이 
 function delBtn(n){ const x=document.createElement('button'); x.className='xdel'; x.type='button'; x.textContent='✕ 삭제'; x.title='이 칸을 대본에서 빼기'; x.onclick=()=>removeBlock(n); return x; }
 function render(){
   const doc = document.getElementById('doc'); doc.innerHTML='';
+  let lnN = 0;  // 말하는 줄 번호(L숫자) — 점검 스크립트(yt_check/secz_db_check) 번호와 같은 기준
   ED.state.forEach((it,n)=>{
     doc.appendChild(insBtn(n));
     if(it.k==='img'){
@@ -310,6 +313,7 @@ function render(){
     if(it.k==='cut'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='cut'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     if(it.k==='fix'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='fix'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     const row = document.createElement('div'); row.className='row';
+    const lno = document.createElement('span'); lno.className='lno'; lno.textContent = 'L' + (++lnN); lno.setAttribute('aria-hidden','true'); row.appendChild(lno);
     const p = document.createElement('div'); p.className='ln '+cls(it.md);
     p.contentEditable='plaintext-only'; if(p.contentEditable!=='plaintext-only') p.contentEditable='true';
     p.textContent = it.md; p.dataset.i = n; mark(p,it);
