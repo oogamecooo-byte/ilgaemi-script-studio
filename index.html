@@ -78,6 +78,19 @@ figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-al
 .ins{display:block;width:100%;border:0;background:none;color:transparent;font-size:.8rem;line-height:1;padding:3px 0;margin:-.55em 0 .1em;cursor:pointer;border-top:1px dashed transparent}
 .ins:hover,.ins:focus{color:var(--acc);border-top-color:var(--line);outline:none}
 @media (hover:none){.blk .xdel{display:block}.ins{color:#cdbf9f}}
+.bar button:disabled{opacity:.4;cursor:default}
+.hist{position:fixed;inset:0;z-index:20;background:rgba(43,42,39,.35);display:flex;justify-content:flex-end}
+.hist .pane{width:min(560px,100%);height:100%;overflow:auto;background:var(--bg);border-left:1px solid var(--line);padding:14px 16px}
+.hist h2{font-size:1.05rem;margin:0 0 6px}
+.hist .sub{color:var(--mute);font-size:.82rem;margin-bottom:12px}
+.hist .it{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:9px 11px;margin-bottom:8px}
+.hist .it .t{font-size:.86rem}
+.hist .it .t small{color:var(--mute)}
+.hist .it button{font-size:.8rem;padding:3px 10px;border-radius:8px;border:1px solid var(--acc);background:var(--card);color:var(--acc);margin:6px 6px 0 0}
+.hist .it button.pri{background:var(--acc);color:#fff}
+.hist .pv{font-size:.82rem;margin-top:8px;white-space:pre-wrap;word-break:break-all;line-height:1.55}
+.hist .pv .rm{background:#fde2df} .hist .pv .ad{background:var(--new)}
+.hist .close{float:right;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:3px 10px;font-size:.85rem}
 </style>
 </head>
 <body>
@@ -269,33 +282,35 @@ const cls = t => { t=t.trim(); return t.startsWith(':')?'q':t.startsWith('=')?'e
 const spokenChars = () => ED.state.filter(i=>i.k==='txt').map(i=>i.md).join('').replace(/\s/g,'').length;
 
 async function showEdit(name){
-  app.innerHTML = `<div class="bar"><button id="back">← 목록</button><button id="reload">↻ 최신본</button><button class="pri" id="save">저장</button><span class="status" id="status">불러오는 중…</span></div><div id="ed"></div>`;
+  app.innerHTML = `<div class="bar"><button id="back">← 목록</button><button id="reload">↻ 최신본</button><button id="undo" title="방금 한 수정 되돌리기 (Ctrl/⌘+Z · 줄 삭제·추가·나누기 포함)" disabled>↶ 되돌리기</button><button id="hist" title="저장 기록에서 이전 판 보기·복원">🕘 기록</button><button class="pri" id="save">저장</button><span class="status" id="status">불러오는 중…</span></div><div id="ed"></div>`;
   document.getElementById('back').onclick = async()=>{ if(await flush()) location.hash='#/'; };
   document.getElementById('reload').onclick = async()=>{ if(ED&&ED.dirty&&!confirm('저장 안 된 수정이 있습니다. 버리고 최신본을 불러올까요?'))return; showEdit(name); };
   document.getElementById('save').onclick = ()=>flush();
+  document.getElementById('undo').onclick = ()=>undo();
+  document.getElementById('hist').onclick = ()=>showHistory();
   let got; try{ got = await getText(name); }catch(e){ setStatus('err', e.message); return; }
   const p = parseMd(got.text);
-  ED = {path:name, sha:got.sha, head:p.head, footer:p.footer, orig:p.items.map(i=>i.md), state:p.items.map((it,n)=>({k:it.k, md:it.md, o:n})), dirty:false, saving:false, timer:null};
+  ED = {path:name, sha:got.sha, head:p.head, footer:p.footer, orig:p.items.map(i=>i.md), state:p.items.map((it,n)=>({k:it.k, md:it.md, o:n})), dirty:false, saving:false, timer:null, undo:[], typing:null};
   const title = ((p.head.match(/^#\s+(.*)$/m)||[])[1]||'').trim();
   ED.title = ED.origTitle = title;
   const ed = document.getElementById('ed');
-  ed.innerHTML = `<h1 class="ttl" id="ttl" title="눌러서 제목 고치기">${esc(title)}</h1><div class="hint"><b>제목</b>도 눌러서 고칠 수 있습니다 · 줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
+  ed.innerHTML = `<h1 class="ttl" id="ttl" title="눌러서 제목 고치기">${esc(title)}</h1><div class="hint"><b>제목</b>도 눌러서 고칠 수 있습니다 · 줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 실수했으면 <b>↶ 되돌리기</b>(Ctrl/⌘+Z) · 저장된 이전 판은 <b>🕘 기록</b>에서 복원 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
   const tt = document.getElementById('ttl');
   const ytm = p.head.match(/<!-- YT-THUMBNAIL:START -->([\s\S]*?)<!-- YT-THUMBNAIL:END -->/);  // YT-Thumbnail 제안(대본 밖 · 읽기 전용 · 2026-09-30)
   if(ytm){ const d=document.createElement('details'); d.open=true; d.className='ytt'; d.innerHTML='<summary>🖼️ 썸네일 · 제목 · 첫 30초 제안 (YT-Thumbnail · 읽기 전용 · 말하는 대본 아님)</summary><pre>'+esc(ytm[1].trim())+'</pre>'; tt.after(d); }
   tt.contentEditable='plaintext-only'; if(tt.contentEditable!=='plaintext-only') tt.contentEditable='true';
   tt.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); tt.blur(); } });
   tt.addEventListener('paste', e=>{ e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain')||'').replace(/\s*\n\s*/g,' ')); });
-  tt.addEventListener('input', ()=>{ ED.title = tt.textContent.replace(/\s*\n\s*/g,' '); tt.classList.toggle('mod', ED.title.trim()!==ED.origTitle); touched(); });
+  tt.addEventListener('input', ()=>{ typingSnap(-1); ED.title = tt.textContent.replace(/\s*\n\s*/g,' '); tt.classList.toggle('mod', ED.title.trim()!==ED.origTitle); touched(); });
   render(); setStatus('ok', '불러옴 '+hhmm()+' · '+spokenChars().toLocaleString()+'자');
 }
 
 function insBtn(at){ const b=document.createElement('button'); b.className='ins'; b.type='button'; b.textContent='＋ 여기에 줄 추가'; b.title='이 자리에 새 줄 추가';
   b.onmousedown=e=>e.preventDefault(); b.onclick=()=>insertLine(at); return b; }
-function insertLine(at){ ED.state.splice(at,0,{k:'txt', md:'', o:null}); render(); touched(); focusAt(at,false); }
+function insertLine(at){ snap('줄 추가'); ED.state.splice(at,0,{k:'txt', md:'', o:null}); render(); touched(); focusAt(at,false); }
 function removeBlock(n){ const it=ED.state[n]; const what = it.k==='img' ? '이 이미지' : '이 ⏳ 칸';
-  if(!confirm(what+'를 대본에서 뺄까요? (저장소의 이미지 파일은 그대로 남습니다 · 되돌리려면 「↻ 최신본」 전에 저장되지 않게 하거나 이전 버전에서 복구)')) return;
-  ED.state.splice(n,1); render(); touched(); }
+  if(!confirm(what+'를 대본에서 뺄까요? (저장소의 이미지 파일은 그대로 남습니다 · 실수면 ↶ 되돌리기)')) return;
+  snap(what+' 삭제'); ED.state.splice(n,1); render(); touched(); }
 function delBtn(n){ const x=document.createElement('button'); x.className='xdel'; x.type='button'; x.textContent='✕ 삭제'; x.title='이 칸을 대본에서 빼기'; x.onclick=()=>removeBlock(n); return x; }
 function render(){
   const doc = document.getElementById('doc'); doc.innerHTML='';
@@ -326,17 +341,79 @@ function render(){
 function mark(p,it){ p.classList.toggle('new', it.o===null); p.classList.toggle('mod', it.o!==null && it.md!==ED.orig[it.o]); }
 function touched(){ ED.dirty=true; setStatus('busy','수정 중… (자동 저장 대기)'); clearTimeout(ED.timer); ED.timer=setTimeout(flush, CFG.autosaveMs); }
 function focusAt(n,atEnd){ const el=document.querySelector('.ln[data-i="'+n+'"]'); if(!el)return; el.focus(); const r=document.createRange(); r.selectNodeContents(el); r.collapse(!atEnd); const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
-function removeLine(n){ ED.state.splice(n,1); render(); touched(); let k=n-1; while(k>=0 && ED.state[k].k!=='txt') k--; if(k>=0) focusAt(k,true); }
+function removeLine(n){ snap('줄 삭제'); ED.state.splice(n,1); render(); touched(); let k=n-1; while(k>=0 && ED.state[k].k!=='txt') k--; if(k>=0) focusAt(k,true); }
 function caretOffset(el){ const s=getSelection(); if(!s.rangeCount) return el.textContent.length; const r=s.getRangeAt(0).cloneRange(); r.selectNodeContents(el); r.setEnd(s.getRangeAt(0).endContainer, s.getRangeAt(0).endOffset); return r.toString().length; }
 
-app.addEventListener('input', e=>{ const p=e.target; if(!p.classList||!p.classList.contains('ln')) return; const it=ED.state[+p.dataset.i]; it.md=p.textContent.replace(/\n+/g,' '); p.className='ln '+cls(it.md); mark(p,it); touched(); });
+app.addEventListener('input', e=>{ const p=e.target; if(!p.classList||!p.classList.contains('ln')) return; typingSnap(+p.dataset.i); const it=ED.state[+p.dataset.i]; it.md=p.textContent.replace(/\n+/g,' '); p.className='ln '+cls(it.md); mark(p,it); touched(); });
 app.addEventListener('paste', e=>{ if(!e.target.classList||!e.target.classList.contains('ln')) return; e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain')||'').replace(/\s*\n\s*/g,' ')); });
 app.addEventListener('keydown', e=>{
   const p=e.target; if(!p.classList||!p.classList.contains('ln')) return; const n=+p.dataset.i;
-  if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); const off=caretOffset(p), t=p.textContent;
+  if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); snap('줄 나누기'); const off=caretOffset(p), t=p.textContent;
     ED.state[n].md=t.slice(0,off).trimEnd(); ED.state.splice(n+1,0,{k:'txt', md:t.slice(off).trimStart(), o:null}); render(); touched(); focusAt(n+1,false); }
   else if(e.key==='Backspace' && p.textContent==='' && !e.isComposing){ e.preventDefault(); removeLine(n); }
 });
+
+/* ================= 되돌리기 (2026-10-22 · 사용자 지시 "대본방에서 그전 단계로 되돌리기 기능 추가. (실수로 삭제했을때)") =================
+   ① 편집 중 되돌리기: 줄 삭제·추가·나누기·칸 삭제 직전, 그리고 글자 입력을 시작할 때(같은 줄에서 2초 넘게 쉬었다가 다시 칠 때) 지금 상태를 쌓아 두고, ↶ 되돌리기 / Ctrl·⌘+Z로 한 단계씩 되돌린다(최대 100단계 · 되돌린 상태도 자동 저장).
+   ② 저장 기록 복원: 🕘 기록 = 이 대본의 저장 커밋 목록(최근 60개) → 미리보기(지금과 다른 줄) → 「이 판으로 되돌리기」 = 그 판 내용을 새 저장으로 올린다(기록은 지워지지 않음 · 되돌린 것도 다시 되돌릴 수 있음). */
+function cloneState(){ return ED.state.map(i=>({k:i.k, md:i.md, o:i.o})); }
+function snap(label){ if(!ED) return; ED.undo.push({state:cloneState(), title:ED.title, label}); if(ED.undo.length>100) ED.undo.shift(); ED.typing=null; const b=document.getElementById('undo'); if(b){ b.disabled=false; b.title='되돌리기: '+label+' (Ctrl/⌘+Z)'; } }
+function typingSnap(i){ const now=Date.now(); if(!ED.typing || ED.typing.i!==i || now-ED.typing.t>2000) snap(i<0?'제목 고치기':'글자 고치기'); ED.typing={i, t:now}; }
+function undo(){
+  if(!ED || !ED.undo.length) return;
+  const u = ED.undo.pop(); ED.state = u.state; ED.title = u.title; ED.typing=null;
+  const tt=document.getElementById('ttl'); if(tt){ tt.textContent=ED.title; tt.classList.toggle('mod', (ED.title||'').trim()!==ED.origTitle); }
+  render(); touched(); setStatus('busy','↶ 되돌림: '+u.label+' · 자동 저장 대기');
+  const b=document.getElementById('undo'); if(b){ b.disabled=!ED.undo.length; b.title = ED.undo.length ? '되돌리기: '+ED.undo[ED.undo.length-1].label+' (Ctrl/⌘+Z)' : '되돌릴 수정 없음'; }
+}
+document.addEventListener('keydown', e=>{
+  if(!ED || !(e.metaKey||e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase()!=='z') return;
+  if(document.querySelector('.hist')) return;
+  e.preventDefault(); undo();
+});
+const kstFull = s => new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+async function showHistory(){
+  if(LOCAL_OK){ alert('로컬 시험 모드에서는 저장 기록을 볼 수 없습니다.'); return; }
+  if(ED && ED.dirty && !(await flush())) { alert('지금 수정이 아직 저장되지 않았습니다. 저장한 뒤 다시 열어 주세요.'); return; }
+  const ov=document.createElement('div'); ov.className='hist';
+  ov.innerHTML='<div class="pane"><button class="close" id="hclose">닫기</button><h2>🕘 저장 기록</h2><div class="sub">자동 저장 한 번마다 한 줄입니다. 「미리보기」로 지금과 다른 줄을 보고, 「이 판으로 되돌리기」를 누르면 그 판이 새로 저장됩니다(기록은 지워지지 않습니다).</div><div id="hl">불러오는 중…</div></div>';
+  document.body.appendChild(ov);
+  const close=()=>ov.remove(); ov.querySelector('#hclose').onclick=close; ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  let cs;
+  try{
+    const r = await fetch(`${CFG.api}/repos/${CFG.dataRepo}/commits?path=${encPath(ED.path)}&sha=${CFG.branch}&per_page=60&_=${Date.now()}`,{cache:'no-store', headers:{Authorization:'Bearer '+TOKEN, Accept:'application/vnd.github+json'}});
+    if(!r.ok) throw new Error('기록 불러오기 실패 ('+r.status+')');
+    cs = await r.json();
+  }catch(e){ ov.querySelector('#hl').textContent=e.message; return; }
+  const hl=ov.querySelector('#hl'); hl.innerHTML='';
+  const curLines = ED.state.filter(i=>i.k==='txt').map(i=>i.md.trim());
+  cs.forEach((c,idx)=>{
+    const msg=c.commit.message.split('\n')[0]; const who = msg.startsWith('대본 수정:') ? '✍️ 내 수정' : '🤖 Claude';
+    const d=document.createElement('div'); d.className='it';
+    d.innerHTML=`<div class="t"><b>${esc(kstFull(c.commit.committer.date))}</b> · ${who}${idx===0?' · <b>지금 판</b>':''}<br><small>${esc(msg)} · ${c.sha.slice(0,7)}</small></div>`;
+    if(idx>0){
+      const pv=document.createElement('button'); pv.textContent='미리보기';
+      const rb=document.createElement('button'); rb.className='pri'; rb.textContent='이 판으로 되돌리기';
+      const box=document.createElement('div'); box.className='pv';
+      let oldText=null;
+      const load=async()=>{ if(oldText!==null) return oldText; const r=await gh(ED.path,{q:'?ref='+c.sha, accept:'application/vnd.github.raw'}); if(!r.ok) throw new Error('그 판 불러오기 실패 ('+r.status+')'); return oldText=await r.text(); };
+      pv.onclick=async()=>{ try{ const t=await load(); const ol=parseMd(t).items.filter(i=>i.k==='txt').map(i=>i.md.trim());
+          const rm=ol.filter(x=>!curLines.includes(x)), ad=curLines.filter(x=>!ol.includes(x));
+          box.innerHTML = (!rm.length && !ad.length) ? '지금 판과 말하는 줄이 같습니다(이미지·제목·메모만 다를 수 있음).'
+            : (rm.length?'<b>그 판에만 있던 줄 '+rm.length+'개</b> (되돌리면 다시 생김)\n'+rm.slice(0,15).map(x=>'<span class="rm">− '+esc(x)+'</span>').join('\n')+(rm.length>15?'\n…':'')+'\n':'')
+            + (ad.length?'<b>지금 판에만 있는 줄 '+ad.length+'개</b> (되돌리면 사라짐)\n'+ad.slice(0,15).map(x=>'<span class="ad">+ '+esc(x)+'</span>').join('\n')+(ad.length>15?'\n…':''):'');
+        }catch(e){ box.textContent=e.message; } };
+      rb.onclick=async()=>{ if(!confirm(kstFull(c.commit.committer.date)+' 판으로 되돌릴까요?\n지금 판은 기록에 남아 있어서 나중에 다시 복원할 수 있습니다.')) return;
+        try{ const t=await load(); setStatus('busy','되돌리는 중…');
+          const res=await putText(ED.path, t, ED.sha, '대본 수정: '+ED.path+' (웹 편집기 · '+c.sha.slice(0,7)+' 판으로 되돌리기)');
+          if(res.conflict){ alert('다른 곳에서 먼저 수정됐습니다. 「↻ 최신본」을 누른 뒤 다시 해 주세요.'); return; }
+          close(); await showEdit(ED.path); setStatus('ok','✅ '+kstFull(c.commit.committer.date)+' 판으로 되돌림 '+hhmm());
+        }catch(e){ alert(e.message); } };
+      d.appendChild(pv); d.appendChild(rb); d.appendChild(box);
+    }
+    hl.appendChild(d);
+  });
+}
 
 /* 저장: 충돌(다른 기기에서 먼저 저장)이면 덮어쓰지 않고 알림 */
 async function flush(){
