@@ -51,7 +51,7 @@ h1{font-size:1.2rem;margin:18px 0 4px}
 .list details.dg>summary .cnt{margin-left:auto;color:var(--mute);font-weight:400;font-size:.82rem}
 .list details.dg>.items{padding:10px 0 6px 18px}
 .row{position:relative;display:flex;align-items:flex-start;gap:6px}
-.lno{flex:0 0 38px;text-align:right;color:#c9c3b6;font-size:.78rem;line-height:1.6;padding-top:5px;user-select:none;font-variant-numeric:tabular-nums}  /* 줄 번호 L숫자 · 옅은 회색 · 2026-10-01 사용자 지시 · 말하는 줄만 셈(이미지·⏳·🎬 제외) */
+.lno{flex:0 0 38px;text-align:right;color:#c9c3b6;font-size:.78rem;line-height:1.6;padding-top:5px;user-select:none;font-variant-numeric:tabular-nums}  /* 줄 번호 L숫자 · 옅은 회색 · 2026-10-01 사용자 지시 · 말하는 줄만 셈(이미지·⏳·🎬·[Codex 메모] 제외) */
 .row .ln{flex:1;min-width:0}
 .ln{font-size:1.2rem;margin:0 0 .9em;padding:2px 30px 2px 8px;border-radius:6px;outline:none;border-left:3px solid transparent;white-space:pre-wrap;word-break:keep-all;min-height:1.6em}
 .ln:focus{background:#fff;box-shadow:0 0 0 2px var(--line)}
@@ -65,6 +65,8 @@ figure{margin:4px 0 1.4em;background:var(--card);border:1px solid var(--line);bo
 figure img{display:block;width:100%;height:auto;border-radius:6px;min-height:40px;background:#f3ecd8}
 figcaption{font-size:.78rem;color:var(--mute);margin-top:6px;word-break:break-all}
 .cut{color:var(--acc,#8a5a10);font-weight:600;text-align:center;margin:.4em 0 1.2em;padding:8px 10px;border-top:2px dashed var(--line);border-bottom:2px dashed var(--line)}
+.ln.codex{font-size:.95rem;color:#2f5d8a;background:#eef4fb;border-left-color:#5b8fc7}  /* [Codex 에게 : …] = 편집자에게 보내는 메모 · 말하지 않는 줄 · L번호 제외 · 2026-10-24 */
+.lno.cx{color:#5b8fc7}
 .fix{color:var(--mute);font-size:.88rem;margin:0 0 1em;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;word-break:break-all}
 #ed details.ytt{margin:0 0 18px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:.9rem;background:rgba(46,125,50,.06)}
 #ed details.ytt>summary{cursor:pointer;font-weight:600}
@@ -278,8 +280,9 @@ function buildMd(){
   const body = ED.state.filter(i=>i.md.trim()).map(i=>i.md.trim()).join('\n\n');
   return headWithTitle() + '\n' + body + '\n\n' + ED.footer.replace(/^\n+/,'');
 }
-const cls = t => { t=t.trim(); return t.startsWith(':')?'q':t.startsWith('=')?'eq':t==='이상입니다.'?'end':''; };
-const spokenChars = () => ED.state.filter(i=>i.k==='txt').map(i=>i.md).join('').replace(/\s/g,'').length;
+const isCodex = t => /^\[\s*Codex/i.test((t||'').trim());  // 2026-10-24 Codex 메모 줄
+const cls = t => { t=t.trim(); return isCodex(t)?'codex':t.startsWith(':')?'q':t.startsWith('=')?'eq':t==='이상입니다.'?'end':''; };
+const spokenChars = () => ED.state.filter(i=>i.k==='txt' && !isCodex(i.md)).map(i=>i.md).join('').replace(/\s/g,'').length;
 
 async function showEdit(name){
   app.innerHTML = `<div class="bar"><button id="back">← 목록</button><button id="reload">↻ 최신본</button><button id="undo" title="방금 한 수정 되돌리기 (Ctrl/⌘+Z · 줄 삭제·추가·나누기 포함)" disabled>↶ 되돌리기</button><button id="hist" title="저장 기록에서 이전 판 보기·복원">🕘 기록</button><button class="pri" id="save">저장</button><span class="status" id="status">불러오는 중…</span></div><div id="ed"></div>`;
@@ -294,7 +297,7 @@ async function showEdit(name){
   const title = ((p.head.match(/^#\s+(.*)$/m)||[])[1]||'').trim();
   ED.title = ED.origTitle = title;
   const ed = document.getElementById('ed');
-  ed.innerHTML = `<h1 class="ttl" id="ttl" title="눌러서 제목 고치기">${esc(title)}</h1><div class="hint"><b>제목</b>도 눌러서 고칠 수 있습니다 · 줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 실수했으면 <b>↶ 되돌리기</b>(Ctrl/⌘+Z) · 저장된 이전 판은 <b>🕘 기록</b>에서 복원 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
+  ed.innerHTML = `<h1 class="ttl" id="ttl" title="눌러서 제목 고치기">${esc(title)}</h1><div class="hint"><b>제목</b>도 눌러서 고칠 수 있습니다 · 줄을 눌러 고치세요 · <b>Enter</b> = 아래 새 줄 · 빈 줄에서 <b>Backspace</b> = 삭제 · 줄 사이 <b>＋ 줄 추가</b> = 그 자리에 새 줄(이미지 앞뒤·맨 위도 가능) · 이미지·⏳ 칸의 <b>✕ 삭제</b> = 그 칸 빼기 · 줄을 <b>[Codex 에게 : …]</b>로 시작하면 편집자(Codex)에게 보내는 메모(파란 줄 · 말하지 않음 · L번호 제외) · 실수했으면 <b>↶ 되돌리기</b>(Ctrl/⌘+Z) · 저장된 이전 판은 <b>🕘 기록</b>에서 복원 · 손을 떼면 ${CFG.autosaveMs/1000}초 뒤 자동 저장<br><span class="legend"><span style="background:var(--mod)">고친 줄</span><span style="background:var(--new)">새 줄</span></span>${LOCAL_OK?' · <b>로컬 시험 모드(저장 안 됨)</b>':''}</div><div id="doc"></div><details><summary>📝 메모 · 점검 로그 (읽기 전용)</summary><pre>${esc(p.footer.replace('## 📝 메모','').replace(/^[-\s]+/,''))}</pre></details>`;
   const tt = document.getElementById('ttl');
   const ytm = p.head.match(/<!-- YT-THUMBNAIL:START -->([\s\S]*?)<!-- YT-THUMBNAIL:END -->/);  // YT-Thumbnail 제안(대본 밖 · 읽기 전용 · 2026-09-30)
   if(ytm){ const d=document.createElement('details'); d.open=true; d.className='ytt'; d.innerHTML='<summary>🖼️ 썸네일 · 제목 · 첫 30초 제안 (YT-Thumbnail · 읽기 전용 · 말하는 대본 아님)</summary><pre>'+esc(ytm[1].trim())+'</pre>'; tt.after(d); }
@@ -328,7 +331,7 @@ function render(){
     if(it.k==='cut'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='cut'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     if(it.k==='fix'){ const w=document.createElement('div'); w.className='blk'; const d=document.createElement('div'); d.className='fix'; d.textContent=it.md; w.appendChild(d); w.appendChild(delBtn(n)); doc.appendChild(w); return; }
     const row = document.createElement('div'); row.className='row';
-    const lno = document.createElement('span'); lno.className='lno'; lno.textContent = 'L' + (++lnN); lno.setAttribute('aria-hidden','true'); row.appendChild(lno);
+    const cx = isCodex(it.md); const lno = document.createElement('span'); lno.className='lno'+(cx?' cx':''); lno.textContent = cx ? '✎' : 'L' + (++lnN); lno.setAttribute('aria-hidden','true'); row.appendChild(lno);  // Codex 메모는 L번호를 세지 않는다(점검 스크립트와 같은 기준 · 2026-10-24)
     const p = document.createElement('div'); p.className='ln '+cls(it.md);
     p.contentEditable='plaintext-only'; if(p.contentEditable!=='plaintext-only') p.contentEditable='true';
     p.textContent = it.md; p.dataset.i = n; mark(p,it);
